@@ -907,8 +907,67 @@ TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_interval_does_
     verify_mocks_and_destroy_socket(mocks, ioHandle);
 }
 
-// values sent to WSAIoctl for tcp_keepalive_time and tcp_keepalive_interval are multiplied by 1000 ms
-// value for tcp_keepalive is passed straight through to WSAIoctl
+TEST_FUNCTION(tcp_keepalive_time_arg_to_socketio_setoption_is_converted_to_milliseconds)
+{
+    // arrange
+    int result;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    int time = 3;
+
+    // act
+    result = socketio_setoption(ioHandle, "tcp_keepalive_time", &time);
+    ASSERT_ARE_EQUAL(int, 0, result);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, time * 1000, persisted_tcp_keepalive.keepalivetime);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
+TEST_FUNCTION(tcp_keepalive_interval_arg_to_socketio_setoption_is_converted_to_milliseconds)
+{
+    // arrange
+    int result;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    int interval = 15;
+
+    // act
+    result = socketio_setoption(ioHandle, "tcp_keepalive_interval", &interval);
+    ASSERT_ARE_EQUAL(int, 0, result);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, interval * 1000, persisted_tcp_keepalive.keepaliveinterval);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
+TEST_FUNCTION(tcp_keepalive_arg_is_not_modified_by_socketio_setoption)
+{
+    // arrange
+    int result;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    int onoff = -42;
+
+    // act
+    result = socketio_setoption(ioHandle, "tcp_keepalive", &onoff);
+    ASSERT_ARE_EQUAL(int, 0, result);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, onoff, persisted_tcp_keepalive.onoff);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
 // keep-alive values only persist if WSAIoctl succeeds
+// make helper 'CONCRETE_IO_HANDLE setup_socket()' and refactor setup_socket_and_expect_WSAIoctl() to call it
 
 END_TEST_SUITE(socketio_win32_unittests)
