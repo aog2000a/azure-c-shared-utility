@@ -734,6 +734,37 @@ TEST_FUNCTION(socketio_dowork_recv_bytes_succeeds)
     socketio_destroy(ioHandle);
 }
 
+// socketio_setoption tests
+
+static CONCRETE_IO_HANDLE setup_socket()
+{
+    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
+    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
+    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    ASSERT_ARE_EQUAL(int, 0, result);
+    return ioHandle;
+}
+
+static CONCRETE_IO_HANDLE setup_socket_and_expect_WSAIoctl(socketio_mocks& mocks)
+{
+    CONCRETE_IO_HANDLE ioHandle = setup_socket();
+
+    mocks.ResetAllCalls();
+
+    STRICT_EXPECTED_CALL(mocks, WSAIoctl(*(SOCKET*)ioHandle, SIO_KEEPALIVE_VALS, IGNORED_PTR_ARG,
+        sizeof(struct tcp_keepalive), NULL, 0, IGNORED_PTR_ARG, NULL, NULL))
+        .IgnoreArgument(3)
+        .IgnoreArgument(7);
+
+    return ioHandle;
+}
+
+static void verify_mocks_and_destroy_socket(socketio_mocks& mocks, CONCRETE_IO_HANDLE ioHandle)
+{
+    mocks.AssertActualAndExpectedCalls();
+    socketio_destroy(ioHandle);
+}
+
 TEST_FUNCTION(socketio_setoption_fails_when_handle_is_null)
 {
     // arrange
@@ -757,9 +788,7 @@ TEST_FUNCTION(socketio_setoption_fails_when_option_name_is_null)
     int irrelevant = 1;
 
     socketio_mocks mocks;
-    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
-    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
-    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    CONCRETE_IO_HANDLE ioHandle = setup_socket();
 
     mocks.ResetAllCalls();
 
@@ -768,23 +797,19 @@ TEST_FUNCTION(socketio_setoption_fails_when_option_name_is_null)
         .NeverInvoked();
 
     // act
-    result = socketio_setoption(ioHandle, NULL, &irrelevant);
+    int result = socketio_setoption(ioHandle, NULL, &irrelevant);
 
     // assert
     ASSERT_ARE_NOT_EQUAL(int, 0, result);
 
-    mocks.AssertActualAndExpectedCalls();
-
-    socketio_destroy(ioHandle);
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
 }
 
 TEST_FUNCTION(socketio_setoption_fails_when_value_is_null)
 {
     // arrange
     socketio_mocks mocks;
-    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
-    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
-    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    CONCRETE_IO_HANDLE ioHandle = setup_socket();
 
     mocks.ResetAllCalls();
 
@@ -793,14 +818,12 @@ TEST_FUNCTION(socketio_setoption_fails_when_value_is_null)
         .NeverInvoked();
 
     // act
-    result = socketio_setoption(ioHandle, "tcp_keepalive", NULL);
+    int result = socketio_setoption(ioHandle, "tcp_keepalive", NULL);
 
     // assert
     ASSERT_ARE_NOT_EQUAL(int, 0, result);
 
-    mocks.AssertActualAndExpectedCalls();
-
-    socketio_destroy(ioHandle);
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
 }
 
 TEST_FUNCTION(socketio_setoption_fails_when_it_receives_an_unsupported_option)
@@ -809,9 +832,7 @@ TEST_FUNCTION(socketio_setoption_fails_when_it_receives_an_unsupported_option)
     int irrelevant = 1;
 
     socketio_mocks mocks;
-    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
-    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
-    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    CONCRETE_IO_HANDLE ioHandle = setup_socket();
 
     mocks.ResetAllCalls();
 
@@ -820,40 +841,15 @@ TEST_FUNCTION(socketio_setoption_fails_when_it_receives_an_unsupported_option)
         .NeverInvoked();
 
     // act
-    result = socketio_setoption(ioHandle, "unsupported_option_name", &irrelevant);
+    int result = socketio_setoption(ioHandle, "unsupported_option_name", &irrelevant);
 
     // assert
     ASSERT_ARE_NOT_EQUAL(int, 0, result);
 
-    mocks.AssertActualAndExpectedCalls();
-
-    socketio_destroy(ioHandle);
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
 }
 
-static CONCRETE_IO_HANDLE setup_socket_and_expect_WSAIoctl(socketio_mocks& mocks)
-{
-    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
-    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
-    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
-    ASSERT_ARE_EQUAL(int, 0, result);
-
-    mocks.ResetAllCalls();
-
-    STRICT_EXPECTED_CALL(mocks, WSAIoctl(*(SOCKET*)ioHandle, SIO_KEEPALIVE_VALS, IGNORED_PTR_ARG,
-        sizeof(struct tcp_keepalive), NULL, 0, IGNORED_PTR_ARG, NULL, NULL))
-        .IgnoreArgument(3)
-        .IgnoreArgument(7);
-
-    return ioHandle;
-}
-
-static void verify_mocks_and_destroy_socket(socketio_mocks& mocks, CONCRETE_IO_HANDLE ioHandle)
-{
-    mocks.AssertActualAndExpectedCalls();
-    socketio_destroy(ioHandle);
-}
-
-TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_does_not_impact_the_other_two)
+TEST_FUNCTION(calling_socketio_setoption_with_tcp_keepalive_does_not_impact_the_other_two_options)
 {
     // arrange
     int irrelevant = 1;
@@ -863,6 +859,7 @@ TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_does_not_impac
 
     // act
     int result = socketio_setoption(ioHandle, "tcp_keepalive", &irrelevant);
+    ASSERT_ARE_EQUAL(int, 0, result);
 
     // assert
     ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.keepalivetime);
@@ -881,6 +878,7 @@ TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_time_does_not_
 
     // act
     int result = socketio_setoption(ioHandle, "tcp_keepalive_time", &irrelevant);
+    ASSERT_ARE_EQUAL(int, 0, result);
 
     // assert
     ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.onoff);
@@ -899,6 +897,7 @@ TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_interval_does_
 
     // act
     int result = socketio_setoption(ioHandle, "tcp_keepalive_interval", &irrelevant);
+    ASSERT_ARE_EQUAL(int, 0, result);
 
     // assert
     ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.onoff);
@@ -959,9 +958,9 @@ TEST_FUNCTION(tcp_keepalive_arg_is_not_modified_by_socketio_setoption)
 
     // act
     result = socketio_setoption(ioHandle, "tcp_keepalive", &onoff);
+    ASSERT_ARE_EQUAL(int, 0, result);
 
     // assert
-    ASSERT_ARE_EQUAL(int, 0, result);
     ASSERT_ARE_EQUAL(int, onoff, persisted_tcp_keepalive.onoff);
 
     verify_mocks_and_destroy_socket(mocks, ioHandle);
@@ -973,9 +972,7 @@ TEST_FUNCTION(socketio_setoption_does_not_persist_keepalive_values_if_WSAIoctl_f
     int irrelevant = 1;
 
     socketio_mocks mocks;
-    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
-    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
-    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    CONCRETE_IO_HANDLE ioHandle = setup_socket();
 
     mocks.ResetAllCalls();
 
@@ -993,7 +990,7 @@ TEST_FUNCTION(socketio_setoption_does_not_persist_keepalive_values_if_WSAIoctl_f
     persisted_tcp_keepalive = { 0, 0, 0 };
 
     // act
-    result = socketio_setoption(ioHandle, "tcp_keepalive", &irrelevant);
+    int result = socketio_setoption(ioHandle, "tcp_keepalive", &irrelevant);
     ASSERT_ARE_NOT_EQUAL(int, 0, result);
 
     result = socketio_setoption(ioHandle, "tcp_keepalive_time", &irrelevant); // use different option for 2nd call so we don't overwrite the value from the 1st
@@ -1002,12 +999,7 @@ TEST_FUNCTION(socketio_setoption_does_not_persist_keepalive_values_if_WSAIoctl_f
     // assert
     ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.onoff);
 
-    mocks.AssertActualAndExpectedCalls();
-
-    socketio_destroy(ioHandle);
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
 }
-
-// make helper 'CONCRETE_IO_HANDLE setup_socket()' and refactor setup_socket_and_expect_WSAIoctl() to call it
-// always assert that socketio_setoption returns the expected value
 
 END_TEST_SUITE(socketio_win32_unittests)
