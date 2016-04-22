@@ -9,10 +9,13 @@
 #include "azure_c_shared_utility/list.h"
 #include "azure_c_shared_utility/lock.h"
 
+#include <windows.h>
+#include <mstcpip.h>
+
 #undef DECLSPEC_IMPORT
 
-#include "winsock2.h"
-#include "ws2tcpip.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #define GBALLOC_H
 extern "C" int gballoc_init(void);
@@ -56,6 +59,8 @@ static ADDRINFO TEST_ADDR_INFO = { AI_PASSIVE, AF_INET, SOCK_STREAM, IPPROTO_TCP
 static const char* TEST_BUFFER_VALUE = "test_buffer_value";
 #define TEST_BUFFER_SIZE    17
 #define TEST_CALLBACK_CONTEXT   0x951753
+
+static struct tcp_keepalive persisted_tcp_keepalive;
 
 TYPED_MOCK_CLASS(socketio_mocks, CGlobalMock)
 {
@@ -177,6 +182,7 @@ public:
     MOCK_STATIC_METHOD_3(, int, ioctlsocket, SOCKET, s, long, cmd, u_long FAR*, argp)
     MOCK_METHOD_END(int, 0);
     MOCK_STATIC_METHOD_9(, int, WSAIoctl, SOCKET, s, DWORD, dwIoControlCode, LPVOID, lpvInBuffer, DWORD, cbInBuffer, LPVOID, lpvOutBuffer, DWORD, cbOutBuffer, LPDWORD, lpcbBytesReturned, LPWSAOVERLAPPED, lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE, lpCompletionRoutine)
+        persisted_tcp_keepalive = *(struct tcp_keepalive *)lpvInBuffer;
     MOCK_METHOD_END(int, 0);
 };
 
@@ -796,5 +802,113 @@ TEST_FUNCTION(socketio_setoption_fails_when_value_is_null)
 
     socketio_destroy(ioHandle);
 }
+
+TEST_FUNCTION(socketio_setoption_fails_when_it_receives_an_unsupported_option)
+{
+    // arrange
+    int irrelevant = 1;
+
+    socketio_mocks mocks;
+    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
+    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
+    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+
+    mocks.ResetAllCalls();
+
+    EXPECTED_CALL(mocks, WSAIoctl(IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG,
+        IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        .NeverInvoked();
+
+    // act
+    result = socketio_setoption(ioHandle, "unsupported_option_name", &irrelevant);
+
+    // assert
+    ASSERT_ARE_NOT_EQUAL(int, 0, result);
+
+    mocks.AssertActualAndExpectedCalls();
+
+    socketio_destroy(ioHandle);
+}
+
+static CONCRETE_IO_HANDLE setup_socket_and_expect_WSAIoctl(socketio_mocks& mocks)
+{
+    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
+    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
+    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+    ASSERT_ARE_EQUAL(int, 0, result);
+
+    mocks.ResetAllCalls();
+
+    STRICT_EXPECTED_CALL(mocks, WSAIoctl(*(SOCKET*)ioHandle, SIO_KEEPALIVE_VALS, IGNORED_PTR_ARG,
+        sizeof(struct tcp_keepalive), NULL, 0, IGNORED_PTR_ARG, NULL, NULL))
+        .IgnoreArgument(3)
+        .IgnoreArgument(7);
+
+    return ioHandle;
+}
+
+static void verify_mocks_and_destroy_socket(socketio_mocks& mocks, CONCRETE_IO_HANDLE ioHandle)
+{
+    mocks.AssertActualAndExpectedCalls();
+    socketio_destroy(ioHandle);
+}
+
+TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_does_not_impact_the_other_two)
+{
+    // arrange
+    int irrelevant = 1;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    // act
+    int result = socketio_setoption(ioHandle, "tcp_keepalive", &irrelevant);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.keepalivetime);
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.keepaliveinterval);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
+TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_time_does_not_impact_the_other_two)
+{
+    // arrange
+    int irrelevant = 1;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    // act
+    int result = socketio_setoption(ioHandle, "tcp_keepalive_time", &irrelevant);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.onoff);
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.keepaliveinterval);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
+TEST_FUNCTION(calling_socketio_setoption_for_option_tcp_keepalive_interval_does_not_impact_the_other_two)
+{
+    // arrange
+    int irrelevant = 1;
+    socketio_mocks mocks;
+    CONCRETE_IO_HANDLE ioHandle = setup_socket_and_expect_WSAIoctl(mocks);
+    persisted_tcp_keepalive = { 0, 0, 0 };
+
+    // act
+    int result = socketio_setoption(ioHandle, "tcp_keepalive_interval", &irrelevant);
+
+    // assert
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.onoff);
+    ASSERT_ARE_EQUAL(int, 0, persisted_tcp_keepalive.keepalivetime);
+
+    verify_mocks_and_destroy_socket(mocks, ioHandle);
+}
+
+// values sent to WSAIoctl for tcp_keepalive_time and tcp_keepalive_interval are multiplied by 1000 ms
+// value for tcp_keepalive is passed straight through to WSAIoctl
+// keep-alive values only persist if WSAIoctl succeeds
 
 END_TEST_SUITE(socketio_win32_unittests)
