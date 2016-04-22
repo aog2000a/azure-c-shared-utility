@@ -566,21 +566,23 @@ int socketio_setoption(CONCRETE_IO_HANDLE socket_io, const char* optionName, con
         if (strcmp(optionName, "tcp_keepalive") == 0)
         {
             struct tcp_keepalive keepAlive = socket_io_instance->keep_alive;
-            keepAlive.onoff = *(unsigned long *)value;
+            keepAlive.onoff = *(int *)value;
 
             result = set_keepalive(socket_io_instance, &keepAlive);
         }
         else if (strcmp(optionName, "tcp_keepalive_time") == 0)
         {
+            unsigned long kaTime = *(int *)value * 1000; // convert to ms
             struct tcp_keepalive keepAlive = socket_io_instance->keep_alive;
-            keepAlive.keepalivetime = *(unsigned long *)value;
+            keepAlive.keepalivetime = kaTime;
 
             result = set_keepalive(socket_io_instance, &keepAlive);
         }
         else if (strcmp(optionName, "tcp_keepalive_interval") == 0)
         {
+            unsigned long kaInterval = *(int *)value * 1000; // convert to ms
             struct tcp_keepalive keepAlive = socket_io_instance->keep_alive;
-            keepAlive.keepaliveinterval = *(unsigned long *)value;
+            keepAlive.keepaliveinterval = kaInterval;
 
             result = set_keepalive(socket_io_instance, &keepAlive);
         }
