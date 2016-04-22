@@ -728,4 +728,73 @@ TEST_FUNCTION(socketio_dowork_recv_bytes_succeeds)
     socketio_destroy(ioHandle);
 }
 
+TEST_FUNCTION(socketio_setoption_fails_when_handle_is_null)
+{
+    // arrange
+    int irrelevant = 1;
+
+    socketio_mocks mocks;
+    EXPECTED_CALL(mocks, WSAIoctl(IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG,
+        IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        .NeverInvoked();
+
+    // act
+    int result = socketio_setoption(NULL, "tcp_keepalive", &irrelevant);
+
+    // assert
+    ASSERT_ARE_NOT_EQUAL(int, 0, result);
+}
+
+TEST_FUNCTION(socketio_setoption_fails_when_option_name_is_null)
+{
+    // arrange
+    int irrelevant = 1;
+
+    socketio_mocks mocks;
+    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
+    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
+    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+
+    mocks.ResetAllCalls();
+
+    EXPECTED_CALL(mocks, WSAIoctl(IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG,
+        IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        .NeverInvoked();
+
+    // act
+    result = socketio_setoption(ioHandle, NULL, &irrelevant);
+
+    // assert
+    ASSERT_ARE_NOT_EQUAL(int, 0, result);
+
+    mocks.AssertActualAndExpectedCalls();
+
+    socketio_destroy(ioHandle);
+}
+
+TEST_FUNCTION(socketio_setoption_fails_when_value_is_null)
+{
+    // arrange
+    socketio_mocks mocks;
+    SOCKETIO_CONFIG socketConfig = { HOSTNAME_ARG, PORT_NUM, NULL };
+    CONCRETE_IO_HANDLE ioHandle = socketio_create(&socketConfig, PrintLogFunction);
+    int result = socketio_open(ioHandle, test_on_io_open_complete, &callbackContext, test_on_bytes_received, &callbackContext, test_on_io_error, &callbackContext);
+
+    mocks.ResetAllCalls();
+
+    EXPECTED_CALL(mocks, WSAIoctl(IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG,
+        IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        .NeverInvoked();
+
+    // act
+    result = socketio_setoption(ioHandle, "tcp_keepalive", NULL);
+
+    // assert
+    ASSERT_ARE_NOT_EQUAL(int, 0, result);
+
+    mocks.AssertActualAndExpectedCalls();
+
+    socketio_destroy(ioHandle);
+}
+
 END_TEST_SUITE(socketio_win32_unittests)
