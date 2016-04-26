@@ -537,6 +537,10 @@ void socketio_dowork(CONCRETE_IO_HANDLE socket_io)
     }
 }
 
+// Edison is missing this from netinet/tcp.h, but this code still works if we manually define it.
+#ifndef SOL_TCP
+#define SOL_TCP 6
+#endif 
 int socketio_setoption(CONCRETE_IO_HANDLE socket_io, const char* optionName, const void* value)
 {
     int result;
