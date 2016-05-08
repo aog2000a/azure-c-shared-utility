@@ -29,6 +29,7 @@ include_directories(${SHARED_UTIL_INC_FOLDER})
 
 #the following variables are project-wide and can be used with cmake-gui
 option(skip_unittests "set skip_unittests to ON to skip unittests (default is OFF)[if possible, they are always build]" OFF)
+option(skip_samples_and_tools "set skip_samples_and_tools to ON to skip building samples and tools (default is OFF, samples and tests are built)" OFF)
 option(use_http "set use_http to ON if http is to be used, set to OFF to not use http" ON)
 option(use_condition "set use_condition to ON if the condition module and its adapters should be enabled" ON)
 
@@ -288,7 +289,9 @@ endfunction(set_platform_files)
 #Setup the platform files
 set_platform_files()
 
-add_subdirectory(testtools)
+if (NOT ${skip_unittests})
+	add_subdirectory(testtools)
+endif()
 
 if(${use_condition})
     compileAsC11()
